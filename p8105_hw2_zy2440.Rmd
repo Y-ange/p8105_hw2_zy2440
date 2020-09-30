@@ -1,0 +1,94 @@
+---
+title: "p8105_hw2_zy2440"
+author: "yangzhixin"
+date: "2020年9月30日"
+output: html_document
+---
+
+#Problem 1
+##Part 1:Read and clean the Mr. Trash Wheel sheet
+```{r 1.1,warning = FALSE}
+rm (list = ls ())
+library(tidyverse)
+library(readxl)
+library(dplyr)
+MrTrash_df <- read_excel("./data/Trash-Wheel-Collection-Totals-8-6-19.xlsx",col_types = "numeric",range=cell_cols("A:N"),col_names = c("Dumpster","Month","Year","Date","Weight","Volume","PlasticBottles","Polystyrene","CigaretteButts","GlassBottles","GroceryBags","ChipBags","SportsBalls","HomesPowered"))
+
+MrTrash_df <- filter(MrTrash_df,!is.na(Dumpster))
+MrTrash_df <- mutate(MrTrash_df,SportsBalls=as.integer(SportsBalls))
+```
+
+##Part 2:Read and clean precipitation data for 2017 and 2018
+```{r 1.2,warning = FALSE}
+precipitation2017 <- read_excel("./data/Trash-Wheel-Collection-Totals-8-6-19.xlsx",sheet='2017 Precipitation',skip=1,n_max=12)
+precipitation2017 <- mutate(precipitation2017, year=2017)
+
+precipitation2018 <- read_excel("./data/Trash-Wheel-Collection-Totals-8-6-19.xlsx",sheet='2018 Precipitation',skip=1,n_max=12)
+precipitation2018 <- mutate(precipitation2018, year=2018)
+
+precipitation_combined <- rbind(precipitation2017,precipitation2018)
+precipitation_combined <- mutate(precipitation_combined,Month=month.name[Month])
+```
+
+##Summary:
+For Mr. Trash Wheel sheet, it includes data from `r nrow(MrTrash_df)` dumpters, from year `r min(MrTrash_df$Year)` to year `r max(MrTrash_df$Year)`. The median number of sports balls in a dumpster in 2017 is`r median(filter(MrTrash_df,Year==2017)$SportsBalls)`.
+For precipitation data for 2017 and 2018, there are `r nrow(precipitation_combined)` months' data recorded in total. The total precipitation in 2018 was `r sum(filter(precipitation_combined,year==2018)$Total)`, the total precipitation in 2017 was `r sum(filter(precipitation_combined,year==2017)$Total)`
+
+#Problem 2
+##Part 1: Read and clean the data
+```{r 2.1}
+NYCsubway_df <- read.csv('./data/NYC_Transit_Subway_Entrance_And_Exit_Data.csv')
+NYCsubway_df <- select(NYCsubway_df,Line, Station.Name, Station.Latitude,Route1,Route2,Route3,Route4,Route5,Route6,Route7,Route8,Route9,Route10,Route11, Entry, Vending, Entrance.Type,ADA)
+NYCsubway_df <- mutate(NYCsubway_df,Entry=recode(Entry, "YES"=TRUE, "NO"=FALSE))
+```
+For now, the dataset about NYC transit is named NYCsubway_df and contains variables including `r colnames(NYCsubway_df)`. So far, I only excluded the unwanted columns using select and transfered the Entry data from character to logical variable using mutate. The dimension of this dataset is `r nrow(NYCsubway_df)`x`r ncol(NYCsubway_df)`. These data are tidy enough except for the Route parts.
+
+##Part 2: Answers to the questions
+```{r 2.2}
+NYCsubway_df <- mutate(NYCsubway_df,station=paste(Line,Station.Name))
+```
+1. There are `r nrow(distinct(NYCsubway_df,station))` distinct stations.
+2. `r sum(distinct(NYCsubway_df,station, .keep_all=TRUE)$ADA)`stations are ADA compliant.
+3. `r sum(filter(NYCsubway_df, Vending=="NO")$Entry)/nrow(filter(NYCsubway_df, Vending=="NO"))` of all stations without vending allow entrance.
+
+##Part 3: 
+```{r}
+NYCsubway_df <- mutate(NYCsubway_df, Route8=as.character(Route8), Route9=as.character(Route9), Route10=as.character(Route10), Route11=as.character(Route11))
+NYCsubway_reformat <- pivot_longer (NYCsubway_df, cols=starts_with("Route"), names_to="route.number", values_to="route.name")
+```
+
+A train has `r nrow(distinct(filter(NYCsubway_reformat, route.name=='A'),station))` distinct stations. `r sum(distinct(filter(NYCsubway_reformat, route.name=='A' ),station,.keep_all = TRUE)$ADA)` of the A train stations are ADA compliant.
+
+
+
+#Problem 3
+##Part 1: Data cleaning
+```{r 3.1}
+pols_month <- read.csv('./data/fivethirtyeight_datasets/pols-month.csv')
+pols_month <- separate(pols_month,mon,into=c('year','month','day'))
+pols_month <- mutate(pols_month, month=month.name[as.numeric(month)])
+pols_month <- mutate(pols_month, president=recode(prez_dem, '1'="dem",'0'="gop"))
+pols_month <- select(pols_month, -day, -prez_dem, -prez_gop)
+```
+
+```{r 3.2}
+snp <- read.csv('./data/fivethirtyeight_datasets/snp.csv')
+snp <- separate(snp,date,into=c('month','day','year'))
+snp <- mutate(snp, month=month.name[as.numeric(month)])
+snp <- select(snp, -day)
+snp <- relocate(snp, year, month, close)
+```
+
+```{r 3.3}
+unemployment <- read.csv('./data/fivethirtyeight_datasets/unemployment.csv') %>% pivot_longer(!Year,names_to="month", values_to="unemployment.rate")
+unemployment <- rename(unemployment,year=Year)
+unemployment <- mutate(unemployment, month=month.name[match(unemployment$month,month.abb)],year=as.character(year))
+
+merge_df <- merge(x=pols_month, y=snp)
+merge_all <- merge(x=merge_df, y=unemployment)
+```
+
+##Summary:
+For dataset pols_month, it contains 7 variables describing the number of politicians who are democratic or republican from year `r min(pols_month$year)` to year `r max(pols_month$year)`, and one variable "president" indicating whether the president at that time was democratic or republican. 
+For dataset snp, it contains `r nrow(snp)` observations of Standard & Poor’s stock market index from year `r min(snp$year)` to year `r max(snp$year)`.
+For the merged data, there are `r nrow(merge_all)` lines of data in all, ranging from year `r min(merge_all$year)` to year `r max(merge_all$year)`. The variables are as follows: `r colnames(merge_all)`.
